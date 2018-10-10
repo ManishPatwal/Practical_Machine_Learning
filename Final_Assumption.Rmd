@@ -1,0 +1,170 @@
+---
+title: "Machine_Learning"
+author: "Manish Patwal"
+date: "October 9, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+#Set working directory & Load Libraries
+```{r,message=FALSE}
+
+setwd("C:/Users/mp64310/Desktop/R_Programming/08_Machine_Learning")
+
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(AppliedPredictiveModeling)
+library(e1071)
+library(klaR)
+library(caretEnsemble)
+```
+
+
+#Data Loading & Processing
+
+```{r,message=FALSE}
+
+train<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+path1<-"C:/Users/mp64310/Desktop/R_Programming/08_Machine_Learning/train.csv"
+if (!file.exists(path1)) {download.file(train,destfile="./train.csv")}
+#zipF<-file.choose("./Dataset.zip")
+#outDir<-"C:/Users/mp64310/Desktop/R_Programming/05_Reproducible_Research/w4
+#lets download test data
+test<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+path2<-"C:/Users/mp64310/Desktop/R_Programming/08_Machine_Learning/test.csv"
+if (!file.exists(path2)) {download.file(test,destfile="./test.csv")}
+
+```
+
+# Lets Check the data
+
+```{r,message=FALSE}
+train_data<-read.csv("./train.csv",header=T,sep=",",na.strings=c("NA",""))
+inTrain  <- createDataPartition(train_data$classe, p=0.7, list=FALSE)
+Training<-train_data[inTrain,]
+Testing<-train_data[-inTrain,]
+
+NAs  <- sapply(Training, function(x) mean(is.na(x))) > 0.95
+Training<-Training[,NAs==FALSE]
+Testing<-Testing[,NAs==FALSE]
+
+```
+
+# Model Building
+
+
+
+
+# 1.Random Forest Method
+```{r,message=FALSE}
+set.seed(23)
+
+RF <- train(classe ~ ., data=Training, method="rf",
+            trControl=trainControl(method="cv", number=5, verboseIter=FALSE))
+#RF$finalModel
+
+# prediction on split Test dataset
+RF_prediction <- predict(RF, newdata=Testing)
+conf_matrix_RF <- confusionMatrix(RF_prediction,Testing$classe)
+conf_matrix_RF
+varImp(RF)
+
+```
+
+
+# 2.Decision Tree
+```{r,message=FALSE}
+
+
+set.seed(23)
+
+DT <- train(classe ~ ., data=Training, method="rpart",
+            trControl=trainControl(method="cv", number=5, verboseIter=FALSE))
+#DT$finalModel
+
+# prediction on split Test dataset
+DT_prediction <- predict(DT, newdata=Testing)
+#DT_prediction
+conf_matrix_DT <- confusionMatrix(DT_prediction,Testing$classe)
+conf_matrix_DT
+
+
+```
+
+# 3. Gradient Boosting Tree
+
+```{r,message=FALSE, eval=FALSE}
+set.seed(23)
+
+GBM_Model<- train(classe ~ ., data=Training, method="gbm",
+            trControl=trainControl(method="cv", number=5, verboseIter=FALSE))
+#GBM_Model$finalModel
+
+# prediction on Test dataset
+GBM_prediction <- predict(GBM_Model, newdata=Testing)
+#summary(GBM_prediction)
+conf_matrix_GBM <- confusionMatrix(GBM_prediction,Testing$classe)
+conf_matrix_GBM
+
+```
+
+# 4. Naive Bayes
+Naive bayes generated a lot of warning messages in markdown so i have only kept the code and not evaluated it.
+```{r,message=FALSE, eval=FALSE}
+
+#controlNB <- trainControl(method="cv", number=5, verboseIter=FALSE)
+NB <- train(classe ~ ., data=Training, method="nb",                  trControl=trainControl(method="cv", number=5))
+
+#NB$finalModel
+
+  
+# prediction on split Test dataset
+NB_prediction <- predict(NB, newdata=Testing)
+conf_matrix_nb <- confusionMatrix(NB_prediction,Testing$classe)
+conf_matrix_nb  
+```
+
+
+# Prediction on Actual Orginal Test Data using Best Accuracy Models
+As we can RF has the highest accuracy (followed by GBM, which has not been evaluated in markdown)
+
+```{r}
+Prediction <- predict(RF,data=test)
+summary(Prediction)
+```
+
+# 5. Stacked Models
+I have not evaluated the model in current markdown file as running all the model together will take very significant time
+
+```{r, Message=FALSE, eval=FALSE}
+
+# Lets also try to stack best performing algorithms and see how each type of algorithm performs
+install.packages("caretEnsemble")
+library(caretEnsemble)
+control <- trainControl(method="repeatedcv", number=4, repeats=2, savePredictions=TRUE, classProbs=TRUE)
+algorithmList <- c('rf', 'gbm')
+set.seed(23)
+models <- caretList(classe~., data=Training, trControl=control, methodList=algorithmList)
+results <- resamples(models)
+summary(results)
+dotplot(results)
+```
+
